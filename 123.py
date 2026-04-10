@@ -8,7 +8,7 @@ from streamlit_javascript import st_javascript
 
 # --- 1. 配置与数据持久化 ---
 DB_FILE = 'anime_community_db.json'
-ADMIN_PASSWORD = "你的私密密码"  # 请修改为您自己的密码
+ADMIN_PASSWORD = "121023"  # 请修改为您自己的密码
 
 
 def load_data():
