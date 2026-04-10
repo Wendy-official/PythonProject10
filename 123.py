@@ -124,7 +124,7 @@ with tab1:
             user_old_score = current_ep_data.get("voter_dict", {}).get(uid)
 
             if user_old_score is not None:
-                st.info(f"💡 你的记录：你曾为第 {ep} 集打过 **{user_old_score}** 分")
+                st.info(f"💡 你的记录：此次第 {ep} 集评分为 **{user_old_score}** 分")
                 default_val = float(user_old_score)
             else:
                 st.caption("✨ 这是你对此集的首次评价")
@@ -137,7 +137,8 @@ with tab1:
                     is_update, old_val = add_or_update_score(data, selected_anime, ep, score, uid)
                     if is_update:
                         st.success(f"✅ 修改成功！分数已从 {old_val} 变更为 {score}")
-
+                    else:
+                        st.success(f"🎉 首次评价成功：{score} 分")
 
                     time.sleep(1)  # 停留1秒让用户看清反馈
                     st.rerun()
