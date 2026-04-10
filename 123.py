@@ -137,8 +137,7 @@ with tab1:
                     is_update, old_val = add_or_update_score(data, selected_anime, ep, score, uid)
                     if is_update:
                         st.success(f"✅ 修改成功！分数已从 {old_val} 变更为 {score}")
-                    else:
-                        st.success(f"🎉 首次评价成功：{score} 分")
+
 
                     time.sleep(1)  # 停留1秒让用户看清反馈
                     st.rerun()
