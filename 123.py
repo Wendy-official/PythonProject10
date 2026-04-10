@@ -2,8 +2,10 @@ import streamlit as st
 import json
 import os
 import pandas as pd
+import hashlib
+from streamlit_javascript import st_javascript
 
-# --- 1. 数据持久化逻辑 ---
+# --- 1. 数据持久化 ---
 DB_FILE = 'anime_community_db.json'
 
 
@@ -22,159 +24,119 @@ def save_data(data):
         json.dump(data, f, ensure_ascii=False, indent=4)
 
 
-# --- 2. 核心算法：策略 B (分集独立统计) ---
-def add_community_score(data, anime, ep, new_score):
+# --- 2. 获取浏览器唯一标识 ---
+def get_user_id():
+    # 获取浏览器的 UserAgent（包含浏览器版本、系统等信息）
+    ua = st_javascript("navigator.userAgent")
+    if ua and ua != 0:
+        # 使用 MD5 加密生成一个 8 位的唯一字符串
+        return hashlib.md5(ua.encode()).hexdigest()[:8]
+    return None
+
+
+# --- 3. 核心算法：防刷分策略 B ---
+def add_community_score(data, anime, ep, new_score, user_id):
     if anime not in data:
         data[anime] = {"综合评分": 0.0}
 
     ep_key = f"第{ep}集"
     if ep_key not in data[anime]:
-        # 初始化：sum(总分), count(该集人数), avg(该集均分)
-        data[anime][ep_key] = {"sum": 0.0, "count": 0, "avg": 0.0}
+        # 新增 voters 列表来记录投过分的用户 ID
+        data[anime][ep_key] = {"sum": 0.0, "count": 0, "avg": 0.0, "voters": []}
 
-    # 更新单集数据
+    # 检查该用户是否评过这一集
+    if user_id in data[anime][ep_key].get("voters", []):
+        return False, "你已经评过这一集了，请勿重复提交哦！"
+
+    # 更新数据
     data[anime][ep_key]["sum"] += new_score
     data[anime][ep_key]["count"] += 1
+    if "voters" not in data[anime][ep_key]: data[anime][ep_key]["voters"] = []
+    data[anime][ep_key]["voters"].append(user_id)
     data[anime][ep_key]["avg"] = round(data[anime][ep_key]["sum"] / data[anime][ep_key]["count"], 2)
 
-    # 更新动画整部综合评分 (所有已评单集均分的平均值)
+    # 计算综合分
     all_ep_infos = [v for k, v in data[anime].items() if isinstance(v, dict)]
     if all_ep_infos:
         all_avgs = [info["avg"] for info in all_ep_infos]
         data[anime]["综合评分"] = round(sum(all_avgs) / len(all_avgs), 2)
 
     save_data(data)
+    return True, "评分成功！"
 
 
-# --- 3. 网页界面设计 ---
+# --- 4. 网页界面 ---
 st.set_page_config(page_title="动画公评网", layout="wide")
-st.title("🌐 动画多人公评系统 (策略 B)")
-
 data = load_data()
 
-# 侧边栏：管理面板
+# 获取用户 ID
+uid = get_user_id()
+
+st.title("🌐 动画多人公评系统")
+if uid:
+    st.caption(f"您的匿名身份 ID: `{uid}` (基于浏览器标识)")
+else:
+    st.caption("正在识别您的设备标识...")
+
+# 侧边栏
 with st.sidebar:
     st.header("⚙️ 管理面板")
-
-    # 添加新动画
     with st.expander("➕ 添加新动画"):
-        new_anime = st.text_input("动画名称")
+        new_name = st.text_input("动画名称")
         if st.button("确认入库"):
-            if new_anime and new_anime not in data:
-                data[new_anime] = {"综合评分": 0.0}
-                save_data(data)
+            if new_name and new_name not in data:
+                data[new_name] = {"综合评分": 0.0}
+                save_data(data);
                 st.rerun()
 
-    # 清除功能
-    st.markdown("---")
-    st.subheader("🗑️ 数据清理")
-    if data:
-        target_anime = st.selectbox("选择操作对象", list(data.keys()))
-        if st.button("🔥 彻底删除该动画"):
-            del data[target_anime]
-            save_data(data)
-            st.rerun()
-
-# 主界面：标签页
-tab1, tab2 = st.tabs(["⭐ 参与评分与详情", "🏆 全站口碑榜"])
+# 主界面
+tab1, tab2 = st.tabs(["⭐ 参与评分", "🏆 战力排行榜"])
 
 with tab1:
     if not data:
-        st.info("库里还没有动画，请在左侧添加。")
+        st.info("请先添加动画")
     else:
-        anime_list = list(data.keys())
-        selected_anime = st.selectbox("请选择要评价的动画", anime_list)
+        selected_anime = st.selectbox("选择动画", list(data.keys()))
+        col_in, col_st = st.columns([1, 1.5])
 
-        st.divider()
-        col_input, col_stats = st.columns([1, 1.5])
-
-        with col_input:
+        with col_in:
             st.subheader("📝 我要评分")
             ep = st.number_input("集数", min_value=1, step=1)
-            # 采用 0.5 步长的评分条，更符合二次元评分习惯
-            score = st.select_slider("你的评分", options=[i / 2 for i in range(21)], value=8.5)
+            score = st.select_slider("评分", options=[i / 2 for i in range(21)], value=8.5)
 
             if st.button("提交评分"):
-                add_community_score(data, selected_anime, ep, score)
-                st.toast(f"已记录评分：{score} 分", icon="✅")
-                st.rerun()
+                if not uid:
+                    st.error("未能识别设备，请刷新页面重试")
+                else:
+                    success, msg = add_community_score(data, selected_anime, ep, score, uid)
+                    if success:
+                        st.success(msg);
+                        st.rerun()
+                    else:
+                        st.error(msg)
 
-        with col_stats:
-            st.subheader(f"📊 《{selected_anime}》分集统计")
+        with col_st:
+            st.subheader(f"📊 《{selected_anime}》统计")
+            st.metric("大众评分", f"{data[selected_anime].get('综合评分', 0.0)} ⭐")
 
-            # 显示综合评分大字报
-            st.metric("大众平均分", f"{data[selected_anime].get('综合评分', 0.0)} ⭐")
-
-            # 提取单集数据并整理
-            ep_details = []
+            # 数据表格
+            ep_list = []
             for k, v in data[selected_anime].items():
-                if isinstance(v, dict):  # 过滤掉非单集字典的键
-                    ep_details.append({
-                        "集数": int(k.replace("第", "").replace("集", "")),
-                        "单集平均分": v["avg"],
-                        "评价人数": v["count"]
-                    })
+                if isinstance(v, dict):
+                    ep_list.append(
+                        {"集数": int(k.replace("第", "").replace("集", "")), "均分": v["avg"], "人数": v["count"]})
 
-            if ep_details:
-                df_details = pd.DataFrame(ep_details).sort_values("集数")
-                # 绘图
-                st.line_chart(df_details.set_index("集数")["单集平均分"])
-                # 展示表格 (使用列配置美化人数显示)
-                st.dataframe(
-                    df_details,
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={
-                        "评价人数": st.column_config.NumberColumn(format="%d 人")
-                    }
-                )
+            if ep_list:
+                df = pd.DataFrame(ep_list).sort_values("集数")
+                st.line_chart(df.set_index("集数")["均分"])
+                st.dataframe(df, use_container_width=True, hide_index=True)
 
 with tab2:
-    st.subheader("🏆 全站战力排行")
+    st.subheader("🏆 全站排行榜")
     if data:
-        leaderboard = []
-        for name, info in data.items():
-            # 计算全集累计评价人次，体现热度
-            total_hits = sum([v['count'] for k, v in info.items() if isinstance(v, dict)])
-            leaderboard.append({
-                "动画名称": name,
-                "大众综合分": info.get("综合评分", 0.0),
-                "累计评价人次": total_hits
-            })
-
-        df_leader = pd.DataFrame(leaderboard).sort_values("大众综合分", ascending=False)
-        st.dataframe(
-            df_leader,
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "大众综合分": st.column_config.NumberColumn(format="%.2f ⭐"),
-                "累计评价人次": st.column_config.NumberColumn(format="%d 次")
-            }
-        )
-    else:
-        st.write("暂无数据")
-from streamlit_javascript import st_javascript
-import streamlit as st
-
-# 获取浏览器标识
-def get_browser_fingerprint():
-    # 这段 JS 代码会返回浏览器的 UserAgent 字符串
-    ua_info = st_javascript("navigator.userAgent")
-    return ua_info
-
-# 在你的网页中使用
-st.subheader("🕵️ 浏览器标识检测")
-browser_id = get_browser_fingerprint()
-
-if browser_id:
-    st.info(f"你的当前设备标识为: {browser_id}")
-    # 你可以对这个长字符串进行哈希处理，生成一个简短的唯一 ID
-    import hashlib
-    short_id = hashlib.md5(browser_id.encode()).hexdigest()[:8]
-    st.write(f"你的匿名身份 ID: {short_id}")
-else:
-    st.warning("正在获取浏览器标识...")
-
+        lb = [
+            {"动画": n, "均分": i["综合评分"], "总人次": sum([v['count'] for k, v in i.items() if isinstance(v, dict)])}
+            for n, i in data.items()]
+        st.dataframe(pd.DataFrame(lb).sort_values("均分", ascending=False), use_container_width=True, hide_index=True)
 
 
