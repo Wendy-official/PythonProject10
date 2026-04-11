@@ -85,7 +85,7 @@ st.title("🌐 群内四月番评分榜")
 # --- 🔐 侧边栏管理面板 ---
 with st.sidebar:
     st.header("📌 频道信息")
-    st.info("数据实时同步至云端。")
+    st.info("欢迎来到群内四月新番评分网络喵！请留下你对每集新番的评分～")
 
     st.markdown("<br><br>" * 10, unsafe_allow_html=True)
     enable_admin = st.checkbox("🔑", help="管理员入口")
