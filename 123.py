@@ -62,12 +62,12 @@ st.set_page_config(page_title="动画公评网", layout="wide")
 data = load_data()
 uid = get_user_id()
 
-st.title("🌐 动画多人公评系统")
+st.title("🌐 群内四月番评分榜")
 
 # --- 隐藏的侧边栏管理逻辑 ---
 with st.sidebar:
     st.header("📌 频道信息")
-    st.info("欢迎来到动画公评社区！在这里你可以记录并分享你对每集动画的看法。")
+    st.info("欢迎来到四月番评分社区！在这里你可以记录并分享你对每集动画的看法。")
 
     # 在侧边栏最底部设置一个极其隐蔽的“开发者入口”
     st.markdown("<br><br>" * 10, unsafe_allow_html=True)  # 用空格把入口推到最下面
