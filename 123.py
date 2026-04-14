@@ -6,13 +6,21 @@ from supabase import create_client
 from streamlit_javascript import st_javascript
 
 # --- 1. 初始化数据库连接 ---
-try:
-    url = st.secrets["SUPABASE_URL"]
-    key = st.secrets["SUPABASE_KEY"]
-    supabase = create_client(url, key)
-except Exception as e:
-    st.error("❌ 数据库连接配置有误，请检查 Secrets。")
+import os
+import streamlit as st
+from supabase import create_client, Client
+
+# 获取环境变量
+url = os.environ.get("SUPABASE_URL") or st.secrets.get("SUPABASE_URL")
+key = os.environ.get("SUPABASE_KEY") or st.secrets.get("SUPABASE_KEY")
+
+# 检查是否拿到了钥匙，没拿到就报错提示
+if not url or not key:
+    st.error("数据库连接配置有误，请检查 Railway 的 Variables 设置！")
     st.stop()
+
+supabase: Client = create_client(url, key)
+
 
 ADMIN_PASSWORD = "121023"
 
